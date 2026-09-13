@@ -1,0 +1,338 @@
+import {
+  Invitation,
+  Inviter,
+  Registerer,
+  RegistererState,
+  Session,
+  SessionState,
+  URI,
+  UserAgent,
+} from "sip.js";
+import { rejectControlCharacters, type UriBuilder } from "../services/destination";
+import { appError, categoryFromSipStatus, categoryFromTransportError } from "../services/errors";
+import type {
+  IncomingHandle,
+  OutgoingHandle,
+  SessionId,
+  SipConnectInput,
+  SipPort,
+  SipTransportEvents,
+} from "../ports/sip";
+
+export type StorageLike = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+};
+
+export type SipAdapterDeps = {
+  storage?: StorageLike;
+  fetchImpl?: typeof fetch;
+  log?: (message: string) => void;
+};
+
+type SessionRecord = {
+  session: Session;
+  id: SessionId;
+};
+
+export function createSipUriBuilder(): UriBuilder {
+  return {
+    parse(value: string) {
+      rejectControlCharacters(value);
+      return UserAgent.makeURI(value);
+    },
+    fromUserHost(user: string, host: string) {
+      rejectControlCharacters(user);
+      rejectControlCharacters(host);
+      return new URI("sip", user, host);
+    },
+  };
+}
+
+function newSessionId(): SessionId {
+  return crypto.randomUUID();
+}
+
+function identityFromInvitation(invitation: Invitation): { displayName: string; uri: string } {
+  const from = invitation.remoteIdentity;
+  const displayName = from?.displayName ?? from?.uri.user ?? "Unknown";
+  const uri = from?.uri.toString() ?? "";
+  return { displayName: String(displayName), uri };
+}
+
+export class SipJsAdapter implements SipPort {
+  private userAgent: UserAgent | null = null;
+  private registerer: Registerer | null = null;
+  private password = "";
+  private events: SipTransportEvents = {};
+  private readonly sessions = new Map<SessionId, SessionRecord>();
+  private readonly uriBuilder = createSipUriBuilder();
+  private readonly storage: StorageLike | undefined;
+  private readonly fetchImpl: typeof fetch;
+  private readonly log: (message: string) => void;
+
+  constructor(deps: SipAdapterDeps = {}) {
+    this.storage = deps.storage;
+    this.fetchImpl = deps.fetchImpl ?? fetch;
+    this.log = deps.log ?? (() => undefined);
+  }
+
+  uri(): UriBuilder {
+    return this.uriBuilder;
+  }
+
+  hasStoredPassword(): boolean {
+    return this.password.length > 0;
+  }
+
+  bind(events: SipTransportEvents): void {
+    this.events = events;
+  }
+
+  async connect(input: SipConnectInput): Promise<void> {
+    this.assertNoLeak(input.password);
+    this.password = input.password;
+    const uri = this.uriBuilder.fromUserHost(input.username, input.domain);
+    const userAgent = new UserAgent({
+      uri: uri as URI,
+      authorizationUsername: input.username,
+      authorizationPassword: this.password,
+      transportOptions: { server: input.webSocketUrl },
+      sessionDescriptionHandlerFactoryOptions: {
+        peerConnectionConfiguration: { iceServers: input.iceServers },
+        iceGatheringTimeout: 5000,
+      },
+      delegate: {
+        onInvite: (invitation) => this.handleInvite(invitation),
+        onNotify: (notification) => {
+          void notification.accept();
+        },
+        onDisconnect: (error) => {
+          if (error) {
+            this.log(`sip_transport_disconnected category=${categoryFromTransportError(error)}`);
+          }
+          this.events.onTransportDisconnected?.();
+        },
+      },
+    });
+    this.userAgent = userAgent;
+    try {
+      await userAgent.start();
+      this.attachTransportTrace(userAgent);
+    } catch (error) {
+      this.clearPassword();
+      throw appError(categoryFromTransportError(error));
+    }
+  }
+
+  async register(): Promise<void> {
+    if (!this.userAgent) {
+      throw appError("generic", "Signaling is not connected.");
+    }
+    const registerer = new Registerer(this.userAgent);
+    this.registerer = registerer;
+    registerer.stateChange.addListener((state) => {
+      if (state === RegistererState.Registered) {
+        this.events.onRegistered?.();
+      }
+      if (state === RegistererState.Unregistered) {
+        this.events.onUnregistered?.();
+      }
+    });
+    try {
+      await registerer.register();
+    } catch (error) {
+      const status = sipStatus(error);
+      if (status === 401 || status === 403 || status === 407) {
+        throw appError("authentication");
+      }
+      throw appError(categoryFromTransportError(error));
+    }
+  }
+
+  async unregister(): Promise<void> {
+    if (this.registerer) {
+      await this.registerer.unregister().catch(() => undefined);
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    await this.unregister();
+    if (this.userAgent) {
+      await this.userAgent.stop().catch(() => undefined);
+    }
+    this.userAgent = null;
+    this.registerer = null;
+    this.sessions.clear();
+    this.clearPassword();
+  }
+
+  async invite(targetUri: string): Promise<OutgoingHandle> {
+    if (!this.userAgent) {
+      throw appError("generic", "Signaling is not connected.");
+    }
+    const parsed = this.uriBuilder.parse(targetUri);
+    if (!parsed) {
+      throw appError("validation");
+    }
+    const sessionId = newSessionId();
+    const inviter = new Inviter(this.userAgent, parsed as URI);
+    this.trackSession(sessionId, inviter);
+    await inviter.invite();
+    return {
+      sessionId,
+      cancel: async () => {
+        await inviter.cancel();
+      },
+    };
+  }
+
+  async sendDtmf(
+    sessionId: SessionId,
+    digit: string,
+    preferredMethod: "rtp" | "info",
+  ): Promise<"rtp" | "info"> {
+    const record = this.sessions.get(sessionId);
+    if (!record) {
+      throw appError("generic");
+    }
+    const canRtp = preferredMethod === "rtp" && this.hasTelephoneEvent(sessionId);
+    if (canRtp) {
+      const handler = record.session.sessionDescriptionHandler as {
+        sendDtmf?: (tones: string) => boolean;
+      } | null;
+      if (handler?.sendDtmf?.(digit)) {
+        return "rtp";
+      }
+    }
+    await record.session.info({
+      requestOptions: {
+        body: {
+          contentDisposition: "render",
+          contentType: "application/dtmf-relay",
+          content: `Signal=${digit}\r\nDuration=160`,
+        },
+      },
+    });
+    return "info";
+  }
+
+  hasTelephoneEvent(sessionId: SessionId): boolean {
+    const record = this.sessions.get(sessionId);
+    const handler = record?.session.sessionDescriptionHandler as {
+      peerConnection?: RTCPeerConnection;
+    } | null;
+    const descriptions = [
+      handler?.peerConnection?.localDescription?.sdp ?? "",
+      handler?.peerConnection?.remoteDescription?.sdp ?? "",
+    ];
+    return descriptions.some((sdp) => /telephone-event/i.test(sdp));
+  }
+
+  private attachTransportTrace(userAgent: UserAgent): void {
+    const transport = userAgent.transport;
+    const originalSend = transport.send.bind(transport);
+    transport.send = async (message: string) => {
+      this.emitSipMessage("send", message);
+      return originalSend(message);
+    };
+    const originalOnMessage = transport.onMessage?.bind(transport);
+    transport.onMessage = (message: string) => {
+      this.emitSipMessage("receive", message);
+      originalOnMessage?.(message);
+    };
+  }
+
+  private emitSipMessage(direction: "send" | "receive", raw: string): void {
+    if (!raw.trim()) {
+      return;
+    }
+    this.events.onSipMessage?.({
+      id: crypto.randomUUID(),
+      direction,
+      at: Date.now(),
+      raw,
+    });
+  }
+
+  private handleInvite(invitation: Invitation): void {
+    const sessionId = newSessionId();
+    this.trackSession(sessionId, invitation);
+    const identity = identityFromInvitation(invitation);
+    const handle: IncomingHandle = {
+      sessionId,
+      identity,
+      accept: async () => {
+        await invitation.accept();
+      },
+      reject: async () => {
+        await invitation.reject();
+      },
+    };
+    this.events.onInvitation?.(handle);
+  }
+
+  private trackSession(sessionId: SessionId, session: Session): void {
+    this.sessions.set(sessionId, { session, id: sessionId });
+    session.stateChange.addListener((state) => {
+      if (state === SessionState.Establishing) {
+        this.events.onOutgoingProgress?.(sessionId);
+      }
+      if (state === SessionState.Established) {
+        this.events.onOutgoingAccepted?.(sessionId);
+        const remote = remoteAudioStream(session);
+        if (remote) {
+          this.events.onRemoteStream?.(sessionId, remote);
+        }
+      }
+      if (state === SessionState.Terminated) {
+        this.sessions.delete(sessionId);
+        this.events.onSessionTerminated?.(sessionId);
+      }
+    });
+  }
+
+  private clearPassword(): void {
+    this.password = "";
+    this.assertNoLeak("");
+  }
+
+  private assertNoLeak(password: string): void {
+    if (!password) {
+      return;
+    }
+    const stored = this.storage?.getItem("sipPassword");
+    if (stored === password) {
+      throw new Error("password leaked to storage");
+    }
+    this.log("sip_event category=connect");
+  }
+}
+
+function remoteAudioStream(session: Session): MediaStream | null {
+  const handler = session.sessionDescriptionHandler as {
+    peerConnection?: RTCPeerConnection;
+  } | null;
+  const peer = handler?.peerConnection;
+  if (!peer) {
+    return null;
+  }
+  const stream = new MediaStream();
+  for (const receiver of peer.getReceivers()) {
+    if (receiver.track?.kind === "audio") {
+      stream.addTrack(receiver.track);
+    }
+  }
+  return stream.getTracks().length > 0 ? stream : null;
+}
+
+function sipStatus(error: unknown): number | undefined {
+  if (error && typeof error === "object" && "statusCode" in error) {
+    return Number(error.statusCode);
+  }
+  return undefined;
+}
+
+export function mapSipFailure(status: number) {
+  return appError(categoryFromSipStatus(status));
+}

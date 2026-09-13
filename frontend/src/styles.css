@@ -1,0 +1,258 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.45;
+  --bg: #f4f1ea;
+  --ink: #1d1a16;
+  --card: #fffdf8;
+  --accent: #0b6e4f;
+  --danger: #9b1d20;
+  --muted: #5c564c;
+  --focus: #0b3d91;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.app-layout {
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: minmax(18rem, var(--console-width, 40rem)) 0.5rem minmax(20rem, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.app-shell {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.pane-divider {
+  align-self: stretch;
+  min-height: 100%;
+  cursor: col-resize;
+  border-radius: 0.4rem;
+  background: #d9d1c3;
+}
+
+.pane-divider:hover,
+.pane-divider:focus-visible {
+  background: var(--accent);
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid #d9d1c3;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.sip-trace {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sip-trace h2 {
+  margin-top: 0;
+}
+
+.sip-trace-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.sip-trace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1;
+  min-height: 12rem;
+  border-top: 1px solid #d9d1c3;
+}
+
+.sip-trace-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  border-radius: 0;
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid #eee6d8;
+}
+
+.sip-trace-icon {
+  display: inline-flex;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.sip-trace-icon.send {
+  color: var(--accent);
+}
+
+.sip-trace-icon.receive {
+  color: var(--danger);
+}
+
+.sip-trace-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sip-trace-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+.sip-trace-raw {
+  margin: 0 0 0.5rem;
+  padding: 0.6rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+  background: #f7f3ea;
+  border-radius: 0.4rem;
+}
+
+.status-line {
+  min-height: 1.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+}
+
+input {
+  min-width: 12rem;
+  padding: 0.45rem 0.6rem;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.85rem;
+}
+
+button.secondary {
+  background: #4a4338;
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dtmf-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(2.5rem, 1fr));
+  gap: 0.4rem;
+  max-width: 12rem;
+}
+
+.remote-audio {
+  width: 100%;
+}
+
+.site-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.site-footer a {
+  color: var(--accent);
+}
+
+@media (max-width: 880px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+    padding: 0.75rem;
+  }
+
+  .pane-divider {
+    display: none;
+  }
+
+  .sip-trace {
+    position: static;
+    max-height: 70vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 0;
+  }
+
+  input {
+    min-width: 100%;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -1,0 +1,26 @@
+[project]
+name = "webrtc-to-freeswitch-ops"
+version = "0.1.0"
+description = "Fabric operator tasks for FreeSWITCH SSH/docker diagnostics"
+requires-python = ">=3.11"
+dependencies = [
+  "fabric>=3.2,<4",
+  "python-dotenv>=1.0,<2",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fs_ops"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["fabfile.py"]
