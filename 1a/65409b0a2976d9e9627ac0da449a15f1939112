@@ -1,0 +1,33 @@
+openspec/changes/build-webrtc-freeswitch-client/acceptance-cases.md
+  s_0c990cb1e67b7f::t_7094f4a19c5649 133-138
+  s_0c990cb1e67b7f::t_96912bf4ec216d 1-132,139-984
+openspec/changes/build-webrtc-freeswitch-client/tasks.md
+  s_0c990cb1e67b7f::t_96912bf4ec216d 1-52
+openspec/changes/build-webrtc-freeswitch-client/specs/sip-registration/spec.md
+  s_0c990cb1e67b7f::t_96912bf4ec216d 1-72
+openspec/changes/build-webrtc-freeswitch-client/design.md
+  s_0c990cb1e67b7f::t_96912bf4ec216d 1-46,50-79,82-169
+  s_0c990cb1e67b7f::t_7094f4a19c5649 47
+  s_0c990cb1e67b7f::t_981e1cce7e769a 48-49,80-81
+docs/freeswitch.md
+  s_0c990cb1e67b7f::t_96912bf4ec216d 1-104
+openspec/changes/build-webrtc-freeswitch-client/specs/runtime-configuration/spec.md
+  s_0c990cb1e67b7f::t_981e1cce7e769a 8,12
+  s_0c990cb1e67b7f::t_96912bf4ec216d 1-7,9-11,13-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "1a65409b0a2976d9e9627ac0da449a15f1939112",
+  "prompts": {},
+  "sessions": {
+    "s_0c990cb1e67b7f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9c0122d0-b6cb-46b8-9387-ec069af1ee85",
+        "model": "default"
+      },
+      "human_author": "Walter Fan <walter.fan@zoom.us>"
+    }
+  }
+}
