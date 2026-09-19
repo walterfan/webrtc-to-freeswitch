@@ -1,0 +1,137 @@
+docs/freeswitch.md
+  s_18e99ad4f161a9::t_db8b5ceb1217a0 96
+openspec/changes/add-video-calling/proposal.md
+  s_0e9c65e40ae6aa::t_78994403427849 1-30
+frontend/src/services/call.spec.ts
+  s_0e9c65e40ae6aa::t_e87d8a96597bb0 86,88-105
+  s_0e9c65e40ae6aa::t_b6f4490485e621 11,52-85
+  s_0e9c65e40ae6aa::t_b41a2a865f3e88 26,28-29,32,34
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 3-10
+  s_0e9c65e40ae6aa::t_0ab46ca3d29377 87
+frontend/src/state/call.spec.ts
+  s_0e9c65e40ae6aa::t_7a121ac1778cee 24,44,54-59,79
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 105-107
+  s_0e9c65e40ae6aa::t_55aeaa631ddb0b 8,90-104
+  s_0e9c65e40ae6aa::t_220fecafaa5d87 108
+frontend/src/app/createAppServices.ts
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 32-39
+  s_0e9c65e40ae6aa::t_e15ec3c0368d51 11-15,24-26
+openspec/changes/add-video-calling/acceptance-cases.md
+  s_0e9c65e40ae6aa::t_849bd76d8f544e 1-456
+frontend/src/services/sipEndpoint.ts
+  s_0e9c65e40ae6aa::t_6a5f8b2f8c7e41 53
+README.md
+  s_18e99ad4f161a9::t_db8b5ceb1217a0 146,161
+  s_0e9c65e40ae6aa::t_cf1d43d5118e5e 3,5-6,16-19,24-26,53,120-124
+  s_0e9c65e40ae6aa::t_dc1c48197c2fd0 125
+openspec/changes/add-video-calling/design.md
+  s_0e9c65e40ae6aa::t_994bc1d8078405 1-31,33-96
+  s_0e9c65e40ae6aa::t_cf1d43d5118e5e 32
+openspec/changes/add-video-calling/tasks.md
+  s_0e9c65e40ae6aa::t_5b38d1dda87864 3-4,8-10,14-16,20
+  s_0e9c65e40ae6aa::t_0b0cdaea1d7012 21
+  s_0e9c65e40ae6aa::t_2745cd1726a521 1-2,5-7,11-13,17-19
+frontend/src/components/CallConsole.spec.ts
+  s_0e9c65e40ae6aa::t_440595514f28bf 166-170
+  s_0e9c65e40ae6aa::t_572671ca044268 165
+  s_0e9c65e40ae6aa::t_6386e9f88b61f3 4,145
+  s_0e9c65e40ae6aa::t_8283ab8ee23a06 150-164,171-172
+frontend/src/types/domain.ts
+  s_0e9c65e40ae6aa::t_d86f8f417893da 70-75
+openspec/changes/add-video-calling/.openspec.yaml
+  s_0e9c65e40ae6aa::t_e9c98d69b43d3b 1-2
+openspec/changes/add-video-calling/specs/video-calling/spec.md
+  s_0e9c65e40ae6aa::t_2354089e5184d3 1-72
+openspec/changes/add-video-calling/test-plan.md
+  s_0e9c65e40ae6aa::t_64b5488f866fe3 1-8,10-143
+  s_0e9c65e40ae6aa::t_0acfb78cdb44dc 9
+frontend/src/adapters/sipAdapter.ts
+  s_0e9c65e40ae6aa::t_9bf9532abaf9e8 14,33,39-40,85,113,119,181-183,188,197-199,201-207,292-294,308,312,315,321-351,369-385,393,395,405
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 78-79,114-118,386-392
+  s_0e9c65e40ae6aa::t_c63ee49610791a 11
+  s_0e9c65e40ae6aa::t_e9fb1d71b93d1f 394
+frontend/src/services/call.ts
+  s_0e9c65e40ae6aa::t_b09826ad4002a1 325-327
+  s_0e9c65e40ae6aa::t_2dc4266e44aa5e 1-8,11,29-30,40-41,55-57,103,105,111,113-117,120-122,137,199-208,231-252,257,264,285-288,311,313-318,322-323,328-331,333-335,341-351,353-354
+  s_0e9c65e40ae6aa::t_a9e19d017901e1 31,282-284,320-321,324,332,336-340,352,355-358
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 89-93,258-262,312,319
+frontend/src/components/CallConsole.vue
+  s_0e9c65e40ae6aa::t_fbcded69f9af2a 95,105-108,112-133,212-213,243-245,266-270,307,310-312,317-319,322,346,416,426
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 86-89,298-300
+frontend/src/styles.css
+  s_0e9c65e40ae6aa::t_705b72d18aef7c 211-242,290-296
+  s_0e9c65e40ae6aa::t_a45625470a629a 297
+frontend/src/config/runtimeConfig.ts
+  s_0e9c65e40ae6aa::t_6a5f8b2f8c7e41 33-35
+frontend/e2e/console.spec.ts
+  s_0e9c65e40ae6aa::t_c34b161804603d 61,84-94
+  s_0e9c65e40ae6aa::t_40dc42ff630ee3 95-96
+frontend/src/ports/media.ts
+  s_0e9c65e40ae6aa::t_d86f8f417893da 4-10,14-15
+frontend/src/state/call.ts
+  s_0e9c65e40ae6aa::t_d86f8f417893da 1-8,17-19,23,30-31,36-44,46,59-61,86-88,103-105,128-137
+frontend/src/ports/sip.ts
+  s_0e9c65e40ae6aa::t_d86f8f417893da 1,38,69,89
+frontend/src/services/errors.ts
+  s_0e9c65e40ae6aa::t_d86f8f417893da 1,25-29,34-41
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 30-33
+  s_0e9c65e40ae6aa::t_69c317dfd1dc67 42-43
+frontend/src/adapters/sipAdapter.spec.ts
+  s_0e9c65e40ae6aa::t_264aa795e259cc 263
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 222-224
+  s_0e9c65e40ae6aa::t_ff20cad82b7b6f 59,65-76,80-81,87,110,209-221,225-229,243
+  s_0e9c65e40ae6aa::t_77a1c7a7726b5a 61-63
+  s_0e9c65e40ae6aa::t_c63ee49610791a 97-102
+  s_0e9c65e40ae6aa::t_3c214525f927bd 4-8,60,64,77-79,230-242,244-262,264
+  s_0e9c65e40ae6aa::t_a60e0277b5f84f 45-47
+  s_0e9c65e40ae6aa::t_1abd78e23e578a 103
+frontend/src/test/fakes.ts
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 41-43
+  s_0e9c65e40ae6aa::t_8d9f5e6ba66f4e 84-85
+  s_0e9c65e40ae6aa::t_8131a2505fb9bc 12,38,40,44,81,83,86-88,114-119,149-152,166,168-171,174,178-188,190,208-213,216-217,237-247,249-267
+  s_0e9c65e40ae6aa::t_a9e19d017901e1 189,248
+frontend/src/adapters/mediaAdapter.spec.ts
+  s_0e9c65e40ae6aa::t_3e16db4d85bde7 8,20-21,25-34,39,50-52,56,75-77,103
+  s_0e9c65e40ae6aa::t_b99a363b26580e 13-16,81-97
+  s_0e9c65e40ae6aa::t_e51b6a1b0bd0ff 72-74
+  s_0e9c65e40ae6aa::t_cd63f55f31d7f7 98-99
+fabfile.py
+  h_0ab5b9336177d2 150
+  s_18e99ad4f161a9::t_7738bd8c36f80a 110-137,210
+  s_18e99ad4f161a9::t_db8b5ceb1217a0 103-109,153,196-209,211-218
+  s_18e99ad4f161a9::t_f33895380f0b5c 219-221
+frontend/src/adapters/mediaAdapter.ts
+  s_0e9c65e40ae6aa::t_a9e19d017901e1 44,59-60,138-143,147-150,152
+  s_0e9c65e40ae6aa::t_03783c0eb307fe 1,27,30-33,39,43,45-53,57,61-76,105-115,133-137,144-146,151
+frontend/src/services/sipEndpoint.spec.ts
+  s_0e9c65e40ae6aa::t_6a5f8b2f8c7e41 20-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "3ad4faa011815f132ebfaafea80de6d241014bcd",
+  "prompts": {},
+  "humans": {
+    "h_0ab5b9336177d2": {
+      "author": "Walter Fan <walter.fan@zoom.us>"
+    }
+  },
+  "sessions": {
+    "s_0e9c65e40ae6aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0aea0-c819-7810-9548-09200db72e37",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Walter Fan <walter.fan@zoom.us>"
+    },
+    "s_18e99ad4f161a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b29a-bb63-7e30-b099-3d644d51230e",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Walter Fan <walter.fan@zoom.us>"
+    }
+  }
+}
