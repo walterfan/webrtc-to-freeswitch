@@ -5,7 +5,7 @@ import { canDispatchCall, initialCallState, reduceCall, type CallEvent } from ".
 const remote = { displayName: "Alice", uri: "sip:1002@localhost" };
 
 const ALL: CallEvent[] = [
-  { type: "outgoing-start", sessionId: "a", remote },
+  { type: "outgoing-start", sessionId: "a", remote, mediaMode: "audio" },
   { type: "outgoing-ringing", sessionId: "a" },
   { type: "incoming", sessionId: "b", remote },
   { type: "answer", sessionId: "b" },
@@ -21,6 +21,7 @@ describe("call reducer", () => {
       type: "outgoing-start",
       sessionId: "a",
       remote,
+      mediaMode: "audio",
     });
     outgoing = reduceCall(outgoing, { type: "outgoing-ringing", sessionId: "a" });
     outgoing = reduceCall(outgoing, { type: "accepted", sessionId: "a" });
@@ -40,6 +41,7 @@ describe("call reducer", () => {
       type: "outgoing-start",
       sessionId: "a",
       remote,
+      mediaMode: "audio",
     });
     expect(reduceCall(state, { type: "outgoing-ringing", sessionId: "stale" }).status).toBe(
       "outgoing-dialing",
@@ -49,7 +51,12 @@ describe("call reducer", () => {
   it("rejects illegal transitions", () => {
     const states = [
       initialCallState(),
-      reduceCall(initialCallState(), { type: "outgoing-start", sessionId: "a", remote }),
+      reduceCall(initialCallState(), {
+        type: "outgoing-start",
+        sessionId: "a",
+        remote,
+        mediaMode: "audio",
+      }),
     ];
     states.push(reduceCall(states[1], { type: "outgoing-ringing", sessionId: "a" }));
     states.push(reduceCall(states[2], { type: "accepted", sessionId: "a" }));
@@ -69,6 +76,7 @@ describe("call reducer", () => {
       type: "outgoing-start",
       sessionId: "a",
       remote,
+      mediaMode: "audio",
     });
     state = reduceCall(state, {
       type: "ended",
@@ -78,5 +86,24 @@ describe("call reducer", () => {
     });
     expect(state.status).toBe("ended");
     expect(state.error?.category).toBe("busy");
+  });
+
+  it("tracks video metadata without adding lifecycle states", () => {
+    let state = reduceCall(initialCallState(), {
+      type: "outgoing-start",
+      sessionId: "video",
+      remote,
+      mediaMode: "video",
+    });
+    expect(state.localVideoStatus).toBe("waiting");
+    expect(state.remoteVideoStatus).toBe("waiting");
+    state = reduceCall(state, { type: "local-video", sessionId: "video", status: "available" });
+    state = reduceCall(state, { type: "remote-video", sessionId: "video", status: "unavailable" });
+    expect(state.status).toBe("outgoing-dialing");
+    expect(state.localVideoStatus).toBe("available");
+    expect(state.remoteVideoStatus).toBe("unavailable");
+    expect(
+      reduceCall(state, { type: "remote-video", sessionId: "stale", status: "available" }),
+    ).toBe(state);
   });
 });

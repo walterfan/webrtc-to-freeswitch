@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const uaStarts: unknown[] = [];
+const inviters: Array<{
+  options: Record<string, unknown>;
+  sessionDescriptionHandler: Record<string, unknown>;
+  emitState(state: string): void;
+}> = [];
 const createdAgents: Array<{
   transport: {
     send: (message: string) => Promise<void>;
@@ -37,6 +42,9 @@ vi.mock("sip.js", () => {
     async stop(): Promise<void> {
       return undefined;
     }
+    static makeURI(value: string) {
+      return { toString: () => value };
+    }
   }
   class Registerer {
     stateChange = { addListener: () => undefined };
@@ -48,12 +56,35 @@ vi.mock("sip.js", () => {
       return undefined;
     }
   }
+  class Inviter {
+    private listener: ((state: string) => void) | undefined;
+    stateChange = {
+      addListener: (listener: (state: string) => void) => (this.listener = listener),
+    };
+    sessionDescriptionHandler: Record<string, unknown> = { localMediaStream: {} as MediaStream };
+    constructor(
+      readonly userAgent: UserAgent,
+      readonly target: URI,
+      readonly options: Record<string, unknown>,
+    ) {
+      inviters.push(this);
+    }
+    async invite(): Promise<void> {
+      return undefined;
+    }
+    async cancel(): Promise<void> {
+      return undefined;
+    }
+    emitState(state: string): void {
+      this.listener?.(state);
+    }
+  }
   return {
     URI,
     UserAgent,
     Registerer,
     Invitation: class {},
-    Inviter: class {},
+    Inviter,
     RegistererState: { Registered: "Registered", Unregistered: "Unregistered" },
     SessionState: {
       Establishing: "Establishing",
@@ -63,12 +94,20 @@ vi.mock("sip.js", () => {
   };
 });
 
+vi.mock(
+  "sip.js/lib/platform/web/session-description-handler/session-description-handler-factory-default.js",
+  () => ({
+    defaultSessionDescriptionHandlerFactory: (mediaStreamFactory: unknown) => mediaStreamFactory,
+  }),
+);
+
 import { SipJsAdapter } from "./sipAdapter";
 
 describe("SipJsAdapter credentials", () => {
   beforeEach(() => {
     uaStarts.length = 0;
     createdAgents.length = 0;
+    inviters.length = 0;
   });
 
   it("keeps the password in memory and never writes it to storage, logs, or fetch", async () => {
@@ -166,5 +205,61 @@ describe("SipJsAdapter credentials", () => {
     agent?.transport.onMessage?.("\r\n");
     expect(captured).toHaveLength(2);
     await adapter.disconnect();
+  });
+
+  it("installs the application media factory and offers requested video constraints", async () => {
+    const mediaStreamFactory = vi.fn().mockResolvedValue({ id: "local" } as MediaStream);
+    const adapter = new SipJsAdapter({ mediaStreamFactory });
+    await adapter.connect({
+      username: "1001",
+      password: "SENTINEL_PW",
+      domain: "localhost",
+      webSocketUrl: "ws://127.0.0.1:7443",
+      iceServers: [],
+    });
+    await adapter.invite("sip:1002@localhost", "video");
+    const userAgentOptions = uaStarts.at(-1) as {
+      sessionDescriptionHandlerFactory?: (
+        constraints: MediaStreamConstraints,
+      ) => Promise<MediaStream>;
+    };
+    await userAgentOptions.sessionDescriptionHandlerFactory?.({ audio: true, video: true });
+    expect(mediaStreamFactory).toHaveBeenCalledWith({ audio: true, video: true });
+    expect(inviters.at(-1)?.options).toMatchObject({
+      sessionDescriptionHandlerOptions: { constraints: { audio: true, video: true } },
+    });
+  });
+
+  it("emits a remote stream again for late tracks and removes its listener on termination", async () => {
+    const adapter = new SipJsAdapter();
+    const streams: MediaStream[] = [];
+    adapter.bind({ onRemoteStream: (_sessionId, stream) => streams.push(stream) });
+    await adapter.connect({
+      username: "1001",
+      password: "SENTINEL_PW",
+      domain: "localhost",
+      webSocketUrl: "ws://127.0.0.1:7443",
+      iceServers: [],
+    });
+    await adapter.invite("sip:1002@localhost", "video");
+    const listeners = new Set<() => void>();
+    const remote = {
+      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+    } as unknown as MediaStream;
+    const inviter = inviters.at(-1);
+    expect(inviter).toBeDefined();
+    if (!inviter) {
+      throw new Error("missing inviter");
+    }
+    inviter.sessionDescriptionHandler.remoteMediaStream = remote;
+    inviter.emitState("Established");
+    expect(streams).toEqual([remote]);
+    for (const listener of listeners) {
+      listener();
+    }
+    expect(streams).toEqual([remote, remote]);
+    inviter.emitState("Terminated");
+    expect(listeners.size).toBe(0);
   });
 });

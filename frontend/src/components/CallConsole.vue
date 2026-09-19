@@ -83,13 +83,16 @@
             Retry
           </button>
         </form>
-        <p class="hint">Endpoint, username, and password stay in memory only; the password must be re-entered after reload.</p>
+        <p class="hint">
+          Endpoint, username, and password stay in memory only; the password must be re-entered
+          after reload.
+        </p>
         <p v-if="registration.error" class="hint">{{ registration.error.message }}</p>
       </section>
 
       <section class="panel" aria-labelledby="call-heading">
         <h2 id="call-heading">Call</h2>
-        <form class="row" @submit.prevent="dial">
+        <form class="row" @submit.prevent="dial('audio')">
           <label>
             Destination
             <input
@@ -99,9 +102,34 @@
               :disabled="!canDial"
             />
           </label>
-          <button type="submit" :disabled="!canDial" :title="dialTitle">Call</button>
+          <button type="submit" :disabled="!canDial" :title="audioDialTitle">Audio call</button>
+          <button type="button" :disabled="!canDial" :title="videoDialTitle" @click="dial('video')">
+            Video call
+          </button>
         </form>
         <p v-if="call.error" class="hint">{{ call.error.message }}</p>
+
+        <section v-show="call.mediaMode === 'video'" class="video-stage" aria-label="Video call">
+          <p v-if="call.remoteVideoStatus === 'unavailable'" class="hint" role="status">
+            Remote video is unavailable. The audio call remains active.
+          </p>
+          <video
+            ref="remoteVideo"
+            class="remote-video"
+            aria-label="Remote call video"
+            autoplay
+            muted
+            playsinline
+          />
+          <video
+            ref="localVideo"
+            class="local-video"
+            aria-label="Local camera preview"
+            autoplay
+            muted
+            playsinline
+          />
+        </section>
 
         <article v-if="call.status === 'incoming-ringing'" aria-live="polite">
           <p>Incoming call from {{ call.remote?.displayName }}</p>
@@ -181,6 +209,8 @@ import { mergeSessionConfig } from "../services/sipEndpoint";
 import SipTracePane from "./SipTracePane.vue";
 
 const remoteAudio = ref<HTMLAudioElement | null>(null);
+const localVideo = ref<HTMLVideoElement | null>(null);
+const remoteVideo = ref<HTMLVideoElement | null>(null);
 const sipWebSocketUrl = ref("");
 const sipDomain = ref("");
 const username = ref("");
@@ -210,6 +240,9 @@ const call = reactive<CallState>({
   remote: null,
   error: null,
   endReason: null,
+  mediaMode: null,
+  localVideoStatus: "not-applicable",
+  remoteVideoStatus: "not-applicable",
 });
 const trace = reactive<SipTraceState>({
   messages: [],
@@ -230,7 +263,11 @@ const statusText = computed(() => {
   if (unsupported.value) {
     return "Unsupported browser context.";
   }
-  return `Service ready. Registration: ${registration.status}. Call: ${call.status}.`;
+  const video =
+    call.mediaMode === "video" && call.remoteVideoStatus === "unavailable"
+      ? " Remote video is unavailable; audio remains active."
+      : "";
+  return `Service ready. Registration: ${registration.status}. Call: ${call.status}.${video}`;
 });
 
 const canEditCredentials = computed(
@@ -258,24 +295,31 @@ const isOutgoing = computed(
   () => call.status === "outgoing-dialing" || call.status === "outgoing-ringing",
 );
 const connectTitle = computed(() =>
-  canConnect.value ? "Connect and register" : "Enter endpoint and credentials after configuration loads",
+  canConnect.value
+    ? "Connect and register"
+    : "Enter endpoint and credentials after configuration loads",
 );
 const disconnectTitle = computed(() =>
   canDisconnect.value
     ? "Unregister and close signaling"
     : "Disconnect is available when registered and idle",
 );
-const dialTitle = computed(() =>
+const audioDialTitle = computed(() =>
   canDial.value ? "Place an audio call" : "Register and wait until idle to place a call",
+);
+const videoDialTitle = computed(() =>
+  canDial.value ? "Place an audio and video call" : "Register and wait until idle to place a call",
 );
 
 onMounted(async () => {
   unsupported.value = !inspectCapabilities(browserCapabilityEnv()).ok;
   const audio = remoteAudio.value;
-  if (!audio) {
+  const local = localVideo.value;
+  const remote = remoteVideo.value;
+  if (!audio || !local || !remote) {
     return;
   }
-  services = createAppServices(audio);
+  services = createAppServices(audio, local, remote);
   services.configClient.subscribe((state) => {
     Object.assign(configState, state);
     if (state.status === "ready" && state.config) {
@@ -299,6 +343,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopResize();
+  services?.call.dispose();
 });
 
 function startResize(event: MouseEvent) {
@@ -368,7 +413,7 @@ async function disconnect() {
   password.value = "";
 }
 
-async function dial() {
+async function dial(mediaMode: "audio" | "video") {
   if (!services || !configState.config) {
     return;
   }
@@ -378,7 +423,7 @@ async function dial() {
       sipWebSocketUrl.value,
       sipDomain.value,
     );
-    await services.call.dial(destination.value, sessionConfig);
+    await services.call.dial(destination.value, sessionConfig, mediaMode);
   } catch (error) {
     call.error =
       error && typeof error === "object" && "message" in error

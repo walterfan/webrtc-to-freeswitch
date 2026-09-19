@@ -67,3 +67,9 @@ export type SafeIdentity = {
 };
 
 export type CallDirection = "incoming" | "outgoing";
+export type MediaMode = "audio" | "video";
+export type VideoStatus = "not-applicable" | "waiting" | "available" | "unavailable";
+
+export function mediaConstraintsFor(mode: MediaMode): MediaStreamConstraints {
+  return { audio: true, video: mode === "video" };
+}

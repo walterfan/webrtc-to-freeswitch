@@ -100,6 +100,41 @@ def _print_stdout(result) -> None:
         print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
 
 
+def _validate_sip_call_id(call_id: str) -> str:
+    call_id = call_id.strip()
+    if not call_id or len(call_id) > 256 or any(ord(char) < 32 for char in call_id):
+        raise SystemExit("call_id must be 1-256 characters without control characters")
+    return call_id
+
+
+# Positional arguments passed by docker exec: $1=log, $2=call_id, $3=context.
+FS_CALL_LOG_SCRIPT = """
+set -eu
+log=$1
+call_id=$2
+context=$3
+matches=$(grep -Fi -C "$context" -- "call-id: $call_id" "$log" || true)
+uuids=$(printf '%s\\n' "$matches" | grep -oE '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}' | sort -u || true)
+if [ -z "$uuids" ]; then
+  matches=$(grep -Fi -C "$context" -- "variable_sip_call_id: $call_id" "$log" || true)
+  uuids=$(printf '%s\\n' "$matches" | grep -oE '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}' | sort -u || true)
+fi
+if [ -z "$uuids" ]; then
+  echo "No FreeSWITCH UUID found for SIP Call-ID: $call_id" >&2
+  exit 1
+fi
+printf 'SIP Call-ID: %s\\nUUID(s):\\n%s\\n\\n' "$call_id" "$uuids"
+awk -v call_id="$call_id" -v uuids="$uuids" '
+  BEGIN { count = split(uuids, uuid, "\\n") }
+  {
+    match_line = index(tolower($0), "call-id: " tolower(call_id)) > 0
+    for (i = 1; i <= count; i++) match_line = match_line || index($0, uuid[i]) > 0
+    if (match_line) print NR ":" $0
+  }
+' "$log"
+""".strip()
+
+
 @task(hosts=DEFAULT_HOSTS)
 def usage(c):
     """Print common fab invocations."""
@@ -112,9 +147,10 @@ FreeSWITCH ops (uv + Fabric)
   uv run fab --list
 
 Examples:
-  uv run fab fs-cli --cmd='global_getvar'
+  uv run fab fs-cli -c 'global_getvar'
   uv run fab fs-cli --cmd='sofia status'
   uv run fab fs-log --pattern='Call-ID: nk5a1knch6ubimge6hbi' --context=10
+  uv run fab fs-call-log --call-id='nk5a1knch6ubimge6hbi'
   uv run fab fs-config --path=sip_profiles/internal.xml
   uv run fab fs-sofia
   uv run fab fs-sofia --profile=internal
@@ -154,6 +190,32 @@ def fs_log(c, pattern: str, context: int = 10):
         )
         _print_stdout(result)
         if result.exited not in (0, 1):
+            raise SystemExit(result.exited)
+
+
+@task(hosts=DEFAULT_HOSTS)
+def fs_call_log(c, call_id: str, context: int = 200):
+    """Find UUID(s) for a SIP Call-ID, then print related FreeSWITCH log lines."""
+    call_id = _validate_sip_call_id(call_id)
+    if context < 1 or context > 2000:
+        raise SystemExit("context must be between 1 and 2000")
+
+    cfg = settings()
+    with build_connection(cfg) as conn:
+        result = docker_exec(
+            conn,
+            cfg,
+            "sh",
+            "-c",
+            FS_CALL_LOG_SCRIPT,
+            "sh",
+            cfg.log,
+            call_id,
+            str(context),
+            warn=True,
+        )
+        _print_stdout(result)
+        if result.exited != 0:
             raise SystemExit(result.exited)
 
 

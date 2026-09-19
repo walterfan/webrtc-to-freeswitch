@@ -9,6 +9,7 @@ import type {
   SipTransportEvents,
 } from "../ports/sip";
 import type { UriBuilder } from "../services/destination";
+import { mediaConstraintsFor, type MediaMode } from "../types/domain";
 
 export const fakeUri: UriBuilder = {
   parse(value) {
@@ -34,7 +35,13 @@ export class FakeSipPort implements SipPort {
   fetchCalls: string[] = [];
   storage = new Map<string, string>();
   lastInvite: string | null = null;
+  lastInviteMode: MediaMode | null = null;
 
+  constructor(
+    private readonly mediaStreamFactory?: (
+      constraints: MediaStreamConstraints,
+    ) => Promise<MediaStream>,
+  ) {}
   bind(events: SipTransportEvents): void {
     this.events = events;
   }
@@ -71,9 +78,14 @@ export class FakeSipPort implements SipPort {
     }
   }
 
-  async invite(targetUri: string): Promise<OutgoingHandle> {
-    this.lastInvite = targetUri;
+  async invite(targetUri: string, mediaMode: MediaMode): Promise<OutgoingHandle> {
     const sessionId = `out-${targetUri}`;
+    const stream = await this.mediaStreamFactory?.(mediaConstraintsFor(mediaMode));
+    this.lastInvite = targetUri;
+    this.lastInviteMode = mediaMode;
+    if (stream) {
+      this.events.onLocalStream?.(sessionId, stream);
+    }
     return {
       sessionId,
       cancel: async () => undefined,
@@ -98,6 +110,12 @@ export class FakeSipPort implements SipPort {
       reject: async () => {
         this.rejectedBusy.push(handle);
       },
+    };
+    handle.accept = async () => {
+      const stream = await this.mediaStreamFactory?.(mediaConstraintsFor("audio"));
+      if (stream) {
+        this.events.onLocalStream?.(handle.sessionId, stream);
+      }
     };
     this.events.onInvitation?.(handle);
     return handle;
@@ -128,7 +146,10 @@ export class FakeMedia implements MediaPort {
   lastConstraints: MediaStreamConstraints | null = null;
   playBlocked = false;
   detached = false;
-  stream = { id: "local" } as MediaStream;
+  stream: MediaStream | null = null;
+  acquireError: unknown = null;
+  localAttached = false;
+  remoteVideoAttached = false;
 
   acquireCount(): number {
     return this.acquires;
@@ -142,16 +163,31 @@ export class FakeMedia implements MediaPort {
     return this.released ? null : this.stream;
   }
 
-  async acquireMicrophone(): Promise<MediaStream> {
+  async acquire(constraints: MediaStreamConstraints): Promise<MediaStream> {
     this.acquires += 1;
-    this.lastConstraints = { audio: true, video: false };
+    this.lastConstraints = { audio: constraints.audio === true, video: constraints.video === true };
+    if (this.acquireError) {
+      throw this.acquireError;
+    }
     this.released = false;
     this.stops = 0;
+    this.stream = fakeStream(Boolean(constraints.video));
     return this.stream;
   }
 
-  async attachRemote(_stream: MediaStream, audioElement: HTMLAudioElement) {
-    audioElement.srcObject = _stream;
+  async attachLocal(stream: MediaStream, videoElement: HTMLVideoElement): Promise<void> {
+    this.localAttached = true;
+    videoElement.srcObject = stream;
+  }
+
+  async attachRemote(
+    stream: MediaStream,
+    audioElement: HTMLAudioElement,
+    videoElement: HTMLVideoElement,
+  ) {
+    audioElement.srcObject = stream;
+    videoElement.srcObject = stream.getVideoTracks?.().length > 0 ? stream : null;
+    this.remoteVideoAttached = videoElement.srcObject !== null;
     return this.playBlocked ? "blocked" : "playing";
   }
 
@@ -169,9 +205,16 @@ export class FakeMedia implements MediaPort {
     return this.muted;
   }
 
-  detachRemote(audioElement: HTMLAudioElement): void {
+  detachLocal(videoElement: HTMLVideoElement): void {
+    this.localAttached = false;
+    videoElement.srcObject = null;
+  }
+
+  detachRemote(audioElement: HTMLAudioElement, videoElement: HTMLVideoElement): void {
     this.detached = true;
     audioElement.srcObject = null;
+    videoElement.srcObject = null;
+    this.remoteVideoAttached = false;
   }
 
   release(): void {
@@ -190,4 +233,35 @@ export function audioElement(): HTMLAudioElement {
     play: async () => undefined,
     pause: () => undefined,
   } as unknown as HTMLAudioElement;
+}
+
+export function videoElement(): HTMLVideoElement {
+  return {
+    srcObject: null,
+    muted: true,
+    playsInline: true,
+    play: async () => undefined,
+    pause: () => undefined,
+  } as unknown as HTMLVideoElement;
+}
+
+export function fakeStream(withVideo: boolean): MediaStream {
+  const tracks = [fakeTrack("audio"), ...(withVideo ? [fakeTrack("video")] : [])];
+  return {
+    id: `local-${withVideo ? "video" : "audio"}`,
+    getTracks: () => tracks,
+    getAudioTracks: () => tracks.filter((track) => track.kind === "audio"),
+    getVideoTracks: () => tracks.filter((track) => track.kind === "video"),
+  } as unknown as MediaStream;
+}
+
+function fakeTrack(kind: "audio" | "video"): MediaStreamTrack {
+  return {
+    kind,
+    enabled: true,
+    readyState: "live",
+    stop: () => undefined,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  } as unknown as MediaStreamTrack;
 }

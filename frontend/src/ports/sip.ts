@@ -1,4 +1,4 @@
-import type { AppError, SafeIdentity } from "../types/domain";
+import type { AppError, MediaMode, SafeIdentity } from "../types/domain";
 
 export type SipMessageDirection = "send" | "receive";
 
@@ -35,6 +35,7 @@ export type SipTransportEvents = {
   onInvitation?: (invitation: IncomingHandle) => void;
   onOutgoingProgress?: (sessionId: SessionId) => void;
   onOutgoingAccepted?: (sessionId: SessionId) => void;
+  onLocalStream?: (sessionId: SessionId, stream: MediaStream) => void;
   onRemoteStream?: (sessionId: SessionId, stream: MediaStream) => void;
   onSessionTerminated?: (sessionId: SessionId, error?: AppError) => void;
   onSipMessage?: (message: SipTraceMessage) => void;
@@ -65,6 +66,7 @@ export function createSipEventHub(): SipTransportEvents & {
     onInvitation: (invitation) => emit("onInvitation", invitation),
     onOutgoingProgress: (sessionId) => emit("onOutgoingProgress", sessionId),
     onOutgoingAccepted: (sessionId) => emit("onOutgoingAccepted", sessionId),
+    onLocalStream: (sessionId, stream) => emit("onLocalStream", sessionId, stream),
     onRemoteStream: (sessionId, stream) => emit("onRemoteStream", sessionId, stream),
     onSessionTerminated: (sessionId, error) => emit("onSessionTerminated", sessionId, error),
     onSipMessage: (message) => emit("onSipMessage", message),
@@ -84,7 +86,7 @@ export type SipPort = {
   register(): Promise<void>;
   unregister(): Promise<void>;
   disconnect(): Promise<void>;
-  invite(targetUri: string): Promise<OutgoingHandle>;
+  invite(targetUri: string, mediaMode: MediaMode): Promise<OutgoingHandle>;
   sendDtmf(
     sessionId: SessionId,
     digit: string,

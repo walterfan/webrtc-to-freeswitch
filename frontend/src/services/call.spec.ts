@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createSipEventHub } from "../ports/sip";
-import { FakeMedia, FakeSipPort, audioElement, fakeUri } from "../test/fakes";
+import {
+  FakeMedia,
+  FakeSipPort,
+  audioElement,
+  fakeStream,
+  fakeUri,
+  videoElement,
+} from "../test/fakes";
+import { appError } from "./errors";
 import type { RuntimeConfig } from "../types/domain";
 import { CallService } from "./call";
 
@@ -14,14 +22,16 @@ const config: RuntimeConfig = {
 };
 
 function setup() {
-  const sip = new FakeSipPort();
   const media = new FakeMedia();
+  const sip = new FakeSipPort((constraints) => media.acquire(constraints));
   const audio = audioElement();
+  const localVideo = videoElement();
+  const remoteVideo = videoElement();
   const hub = createSipEventHub();
   sip.bind(hub);
-  const service = new CallService(sip, media, fakeUri, audio);
+  const service = new CallService(sip, media, fakeUri, audio, localVideo, remoteVideo);
   service.attach(hub);
-  return { sip, media, audio, service };
+  return { sip, media, audio, localVideo, remoteVideo, service };
 }
 
 describe("CallService", () => {
@@ -37,6 +47,60 @@ describe("CallService", () => {
     await service.hangup();
     expect(service.getState().status).toBe("idle");
     expect(media.stops).toBe(1);
+  });
+
+  it("places a video call with a local preview and reports remote video", async () => {
+    const { service, sip, media, localVideo, remoteVideo } = setup();
+    await service.dial("1002", config, "video");
+    expect(sip.lastInviteMode).toBe("video");
+    expect(media.lastConstraints).toEqual({ audio: true, video: true });
+    expect(service.getState().localVideoStatus).toBe("available");
+    expect(localVideo.srcObject).toBe(media.localStream());
+
+    sip.events.onOutgoingAccepted?.("out-sip:1002@localhost");
+    sip.events.onRemoteStream?.("out-sip:1002@localhost", fakeStream(true));
+    await Promise.resolve();
+    expect(service.getState().remoteVideoStatus).toBe("available");
+    expect(remoteVideo.srcObject).not.toBeNull();
+  });
+
+  it("does not create an invitation when video media cannot be acquired", async () => {
+    const { service, sip, media } = setup();
+    media.acquireError = appError("permission");
+    await expect(service.dial("1002", config, "video")).rejects.toMatchObject({
+      category: "permission",
+      message: expect.stringContaining("Camera"),
+    });
+    expect(sip.lastInvite).toBeNull();
+    expect(service.getState().status).toBe("idle");
+  });
+
+  it("keeps audio active when a video destination has no remote video", async () => {
+    const { service, sip } = setup();
+    await service.dial("1002", config, "video");
+    sip.events.onOutgoingAccepted?.("out-sip:1002@localhost");
+    sip.events.onRemoteStream?.("out-sip:1002@localhost", fakeStream(false));
+    await Promise.resolve();
+    expect(service.getState().status).toBe("active");
+    expect(service.getState().remoteVideoStatus).toBe("unavailable");
+  });
+
+  it("accepts a late current video stream and ignores a stale one", async () => {
+    const { service, sip } = setup();
+    await service.dial("1002", config, "video");
+    const sessionId = "out-sip:1002@localhost";
+    sip.events.onOutgoingAccepted?.(sessionId);
+    sip.events.onRemoteStream?.(sessionId, fakeStream(false));
+    await Promise.resolve();
+    expect(service.getState().remoteVideoStatus).toBe("unavailable");
+
+    sip.events.onRemoteStream?.(sessionId, fakeStream(true));
+    await Promise.resolve();
+    expect(service.getState().remoteVideoStatus).toBe("available");
+
+    sip.events.onRemoteStream?.("stale", fakeStream(false));
+    await Promise.resolve();
+    expect(service.getState().remoteVideoStatus).toBe("available");
   });
 
   it("rejects a second outgoing call and a busy incoming invitation", async () => {

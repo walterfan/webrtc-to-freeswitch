@@ -30,7 +30,9 @@ export function isRuntimeConfig(value: unknown): value is ServerRuntimeConfig {
   );
 }
 
-export async function fetchRuntimeConfig(fetcher: typeof fetch = fetch): Promise<ServerRuntimeConfig> {
+export async function fetchRuntimeConfig(
+  fetcher: typeof fetch = fetch,
+): Promise<ServerRuntimeConfig> {
   const response = await fetcher("/api/config");
   if (!response.ok) {
     throw new Error("configuration");

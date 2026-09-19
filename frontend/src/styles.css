@@ -208,6 +208,38 @@ button:disabled {
   max-width: 12rem;
 }
 
+.video-stage {
+  position: relative;
+  min-height: 12rem;
+  margin-top: 1rem;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #1d1a16;
+}
+
+.remote-video,
+.local-video {
+  display: block;
+  object-fit: cover;
+  background: #1d1a16;
+}
+
+.remote-video {
+  width: 100%;
+  min-height: 12rem;
+  aspect-ratio: 16 / 9;
+}
+
+.local-video {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: min(32%, 12rem);
+  aspect-ratio: 16 / 9;
+  border: 2px solid var(--card);
+  border-radius: 0.4rem;
+}
+
 .remote-audio {
   width: 100%;
 }
@@ -254,5 +286,13 @@ button:disabled {
   .row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .local-video {
+    position: static;
+    width: 100%;
+    margin-top: 0.75rem;
+    border: 0;
+    border-radius: 0;
   }
 }

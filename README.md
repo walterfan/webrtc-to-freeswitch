@@ -1,8 +1,9 @@
 # webrtc-to-freeswitch
 
-A browser-based WebRTC audio-calling client that registers with an existing
+A browser-based WebRTC calling client that registers with an existing
 FreeSWITCH server over SIP-over-secure-WebSocket and makes or receives one
-secure audio call at a time — no native softphone required.
+secure audio call at a time, with an outbound audio/video option — no native
+softphone required.
 
 > **Status: implementation in progress.** OpenSpec remains the source of
 > behavior. The `frontend/` and `backend/` workspaces exist and can be started
@@ -12,16 +13,17 @@ secure audio call at a time — no native softphone required.
 
 - SIP registration to FreeSWITCH over WSS with explicit connection/registration
   states, bounded reconnect, and actionable errors.
-- One audio call at a time: outgoing and incoming, with answer, reject, cancel,
-  hang up, mute, and DTMF.
-- Just-in-time microphone acquisition and remote-audio playback with autoplay
-  recovery.
+- One call at a time: outgoing and incoming audio, plus outbound audio/video,
+  with answer, reject, cancel, hang up, mute, and DTMF.
+- Just-in-time microphone/camera acquisition for outbound video calls, a muted
+  local preview, remote-video presentation, and remote-audio autoplay recovery.
 - A small FastAPI service that serves validated, non-secret runtime
   configuration and health/readiness — **not** a SIP proxy. SIP passwords are
   client-supplied and memory-only.
 
-Out of scope for the first release: video, transfer, hold, conferencing, call
-history, recording, PSTN provisioning, and any FreeSWITCH server provisioning.
+Out of scope: incoming video, camera switching, mid-call media renegotiation,
+screen sharing, transfer, hold, conferencing, call history, recording, PSTN
+provisioning, and any FreeSWITCH server provisioning.
 
 ## Architecture at a glance
 
@@ -48,7 +50,7 @@ openspec/            OpenSpec config and specs
     tasks.md             implementation checklist
     acceptance-cases.md  QA acceptance test cases + traceability matrix
     specs/               capability specs (runtime-configuration, sip-registration,
-                         audio-calling, browser-media)
+                         audio-calling, browser-media, video-calling)
 frontend/            Vue 3 + TypeScript + Vite SPA
 backend/             uv-managed FastAPI service
 fabfile.py           Fabric tasks for FreeSWITCH SSH/docker diagnostics
@@ -115,6 +117,12 @@ Operator FreeSWITCH setup is in [`docs/freeswitch.md`](docs/freeswitch.md).
 The real-PBX checklist stays `NOT RUN` until you supply `INTEROP_*` values;
 `python scripts/interop_harness.py` skips when they are unset.
 
+For video, the browser and target FreeSWITCH route must share a WebRTC video
+codec, and the caller must grant camera and microphone access. A destination
+that accepts audio but no video remains an audio call and shows that remote
+video is unavailable. The video interop checklist is opt-in and must use only
+a non-production instance with operator-supplied protected credentials.
+
 ### FreeSWITCH fab diagnostics
 
 From this laptop, Fabric tasks SSH to the FreeSWITCH host and run
@@ -135,6 +143,7 @@ Auth: prefer `FS_SSH_KEY` when the key file exists; otherwise use
 | --- | --- |
 | `fs-cli` | Run `fs_cli -x "<cmd>"` in the container |
 | `fs-log` | Grep FreeSWITCH log (`--pattern`, `--context`) |
+| `fs-call-log` | Resolve SIP Call-ID to UUID and print related logs |
 | `fs-config` | `cat` a conf file under `FS_CONF` |
 | `fs-sofia` | `sofia status` (optional `--profile`) |
 | `fs-reloadxml` | `reloadxml` |
@@ -149,6 +158,7 @@ Examples:
 uv run fab fs-cli --cmd='global_getvar'
 uv run fab fs-cli --cmd='sofia status'
 uv run fab fs-log --pattern='Call-ID: nk5a1knch6ubimge6hbi' --context=10
+uv run fab fs-call-log --call-id='nk5a1knch6ubimge6hbi'
 uv run fab fs-config --path=sip_profiles/internal.xml
 uv run fab fs-sofia --profile=internal
 uv run fab pcap-start

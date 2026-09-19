@@ -50,10 +50,7 @@ export function validateSipEndpoint(
     parsed.protocol === "ws:" &&
     (environment !== "development" || !isLoopbackHost(parsed.hostname))
   ) {
-    throw appError(
-      "validation",
-      "Plain ws:// is only allowed for loopback hosts in development.",
-    );
+    throw appError("validation", "Plain ws:// is only allowed for loopback hosts in development.");
   }
 }
 

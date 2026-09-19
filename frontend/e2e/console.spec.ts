@@ -58,7 +58,7 @@ test("startup, register, outgoing, incoming, autoplay recovery, and disconnect",
   await expect(page.getByText("Call-ID: e2e-id")).toBeVisible();
 
   await page.getByLabel("Destination").fill("1002");
-  await page.getByRole("button", { name: "Call", exact: true }).click();
+  await page.getByRole("button", { name: "Audio call", exact: true }).click();
   await expect(page.getByText("Calling 1002")).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 
@@ -79,6 +79,19 @@ test("startup, register, outgoing, incoming, autoplay recovery, and disconnect",
   await page.getByRole("button", { name: "Hang up" }).click();
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(page.getByRole("status")).toContainText("Registration: disconnected");
+});
+
+test("video call shows a local preview in fake signaling mode", async ({ page }) => {
+  await openApp(page);
+  await page.getByLabel("SIP WebSocket URL").fill("ws://127.0.0.1:7443");
+  await page.getByLabel("SIP domain").fill("localhost");
+  await page.getByLabel("SIP username").fill("1001");
+  await page.getByLabel("SIP password").fill("pw");
+  await page.getByTestId("connect").click();
+  await page.getByLabel("Destination").fill("1002");
+  await page.getByRole("button", { name: "Video call", exact: true }).click();
+  await expect(page.getByText("Calling 1002")).toBeVisible();
+  await expect(page.getByLabel("Local camera preview")).toBeVisible();
 });
 
 test("keyboard operation and narrow viewport", async ({ page }) => {

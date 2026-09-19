@@ -8,22 +8,35 @@ import { RegistrationService } from "../services/registration";
 import { SipTraceService } from "../services/sipTrace";
 import { FakeMedia, FakeSipPort, fakeUri } from "../test/fakes";
 
-export function createAppServices(audioElement: HTMLAudioElement) {
+export function createAppServices(
+  audioElement: HTMLAudioElement,
+  localVideoElement: HTMLVideoElement,
+  remoteVideoElement: HTMLVideoElement,
+) {
   const fakeMode =
     import.meta.env.VITE_FAKE_SIGNALING === "1" ||
     (typeof window !== "undefined" && Boolean(window.__USE_FAKE_SIGNALING__));
   const configClient = new RuntimeConfigClient();
   const hub = createSipEventHub();
-  const sip = fakeMode ? new FakeSipPort() : new SipJsAdapter();
   const media = fakeMode
     ? new FakeMedia()
     : new BrowserMediaAdapter((constraints) => navigator.mediaDevices.getUserMedia(constraints));
+  const sip = fakeMode
+    ? new FakeSipPort((constraints) => media.acquire(constraints))
+    : new SipJsAdapter({ mediaStreamFactory: (constraints) => media.acquire(constraints) });
   const uri = fakeMode ? fakeUri : createSipUriBuilder();
   sip.bind(hub);
   const sipTrace = new SipTraceService();
   sipTrace.attach(hub);
   const registration = new RegistrationService(sip, undefined, browserCapabilityEnv);
-  const call = new CallService(sip, media, uri, audioElement);
+  const call = new CallService(
+    sip,
+    media,
+    uri,
+    audioElement,
+    localVideoElement,
+    remoteVideoElement,
+  );
   registration.attach(hub);
   call.attach(hub);
   if (fakeMode && typeof window !== "undefined") {

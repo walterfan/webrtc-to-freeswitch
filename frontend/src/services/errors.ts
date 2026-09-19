@@ -1,4 +1,4 @@
-import type { AppError, ErrorCategory } from "../types/domain";
+import type { AppError, ErrorCategory, MediaMode } from "../types/domain";
 
 const CATEGORY_MESSAGES: Record<ErrorCategory, string> = {
   configuration: "Runtime configuration is unavailable.",
@@ -20,6 +20,25 @@ const CATEGORY_MESSAGES: Record<ErrorCategory, string> = {
 
 export function appError(category: ErrorCategory, message?: string): AppError {
   return { category, message: message ?? CATEGORY_MESSAGES[category] };
+}
+
+export function mediaErrorForMode(category: ErrorCategory, mode: MediaMode): AppError {
+  if (mode !== "video") {
+    return appError(category);
+  }
+  if (category === "permission") {
+    return appError(
+      category,
+      "Camera and microphone permission are required to place a video call.",
+    );
+  }
+  if (category === "missing-device") {
+    return appError(category, "A camera and microphone are required to place a video call.");
+  }
+  if (category === "media") {
+    return appError(category, "Camera or microphone media could not be started.");
+  }
+  return appError(category);
 }
 
 export function categoryFromSipStatus(status: number): ErrorCategory {

@@ -1,6 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerRuntimeConfig } from "../types/domain";
+import { fakeStream } from "../test/fakes";
 import CallConsole from "./CallConsole.vue";
 
 const validConfig: ServerRuntimeConfig = {
@@ -141,9 +142,32 @@ describe("CallConsole", () => {
     await flushPromises();
     await wrapper.get('[data-testid="answer"]').trigger("click");
     await flushPromises();
-    sip.events.onRemoteStream?.("in-1", { id: "remote" } as MediaStream);
+    sip.events.onRemoteStream?.("in-1", fakeStream(false));
     await flushPromises();
     expect(wrapper.text()).toContain("Enable audio");
+  });
+
+  it("offers explicit audio and video call actions with a video preview", async () => {
+    mockConfig(true);
+    const wrapper = mount(CallConsole);
+    await flushPromises();
+    await wrapper.get('input[name="sipWebSocketUrl"]').setValue("ws://127.0.0.1:7443");
+    await wrapper.get('input[name="sipDomain"]').setValue("localhost");
+    await wrapper.get('input[name="username"]').setValue("1001");
+    await wrapper.get('input[name="password"]').setValue("pw");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    await wrapper.get('input[name="destination"]').setValue("1002");
+    expect(wrapper.get('button[type="submit"]').text()).toBe("Connect");
+    expect(wrapper.text()).toContain("Audio call");
+    await wrapper.get('button[title="Place an audio and video call"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".video-stage").isVisible()).toBe(true);
+    const sip = window.__FAKE_SIP__ as import("../test/fakes").FakeSipPort;
+    sip.events.onOutgoingAccepted?.("out-sip:1002@localhost");
+    sip.events.onRemoteStream?.("out-sip:1002@localhost", fakeStream(false));
+    await flushPromises();
+    expect(wrapper.text()).toContain("Remote video is unavailable");
   });
 
   it("keeps SIP messages after disconnect and clears them on request", async () => {

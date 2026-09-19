@@ -93,6 +93,7 @@ uv run fab --list
 uv run fab usage
 uv run fab fs-cli --cmd='sofia status'
 uv run fab fs-log --pattern='Call-ID: ...' --context=10
+uv run fab fs-call-log --call-id='...'
 uv run fab fs-config --path=sip_profiles/internal.xml
 uv run fab pcap-start
 uv run fab pcap-stop

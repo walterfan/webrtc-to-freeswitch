@@ -17,9 +17,9 @@ describe("validateSipEndpoint", () => {
   });
 
   it("rejects plain ws in production", () => {
-    expect(() =>
-      validateSipEndpoint("ws://127.0.0.1:7443", "localhost", "production"),
-    ).toThrow(/ws:\/\//);
+    expect(() => validateSipEndpoint("ws://127.0.0.1:7443", "localhost", "production")).toThrow(
+      /ws:\/\//,
+    );
   });
 
   it("rejects an invalid domain", () => {

@@ -8,8 +8,10 @@ import {
   URI,
   UserAgent,
 } from "sip.js";
+import { defaultSessionDescriptionHandlerFactory } from "sip.js/lib/platform/web/session-description-handler/session-description-handler-factory-default.js";
 import { rejectControlCharacters, type UriBuilder } from "../services/destination";
 import { appError, categoryFromSipStatus, categoryFromTransportError } from "../services/errors";
+import { mediaConstraintsFor, type MediaMode } from "../types/domain";
 import type {
   IncomingHandle,
   OutgoingHandle,
@@ -28,11 +30,14 @@ export type SipAdapterDeps = {
   storage?: StorageLike;
   fetchImpl?: typeof fetch;
   log?: (message: string) => void;
+  mediaStreamFactory?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
 };
 
 type SessionRecord = {
   session: Session;
   id: SessionId;
+  localStream?: MediaStream;
+  removeRemoteTrackListener?: () => void;
 };
 
 export function createSipUriBuilder(): UriBuilder {
@@ -70,11 +75,14 @@ export class SipJsAdapter implements SipPort {
   private readonly storage: StorageLike | undefined;
   private readonly fetchImpl: typeof fetch;
   private readonly log: (message: string) => void;
+  private readonly mediaStreamFactory:
+    ((constraints: MediaStreamConstraints) => Promise<MediaStream>) | undefined;
 
   constructor(deps: SipAdapterDeps = {}) {
     this.storage = deps.storage;
     this.fetchImpl = deps.fetchImpl ?? fetch;
     this.log = deps.log ?? (() => undefined);
+    this.mediaStreamFactory = deps.mediaStreamFactory;
   }
 
   uri(): UriBuilder {
@@ -102,6 +110,13 @@ export class SipJsAdapter implements SipPort {
         peerConnectionConfiguration: { iceServers: input.iceServers },
         iceGatheringTimeout: 5000,
       },
+      ...(this.mediaStreamFactory
+        ? {
+            sessionDescriptionHandlerFactory: defaultSessionDescriptionHandlerFactory(
+              this.mediaStreamFactory,
+            ),
+          }
+        : {}),
       delegate: {
         onInvite: (invitation) => this.handleInvite(invitation),
         onNotify: (notification) => {
@@ -163,11 +178,14 @@ export class SipJsAdapter implements SipPort {
     }
     this.userAgent = null;
     this.registerer = null;
+    for (const record of this.sessions.values()) {
+      record.removeRemoteTrackListener?.();
+    }
     this.sessions.clear();
     this.clearPassword();
   }
 
-  async invite(targetUri: string): Promise<OutgoingHandle> {
+  async invite(targetUri: string, mediaMode: MediaMode): Promise<OutgoingHandle> {
     if (!this.userAgent) {
       throw appError("generic", "Signaling is not connected.");
     }
@@ -176,9 +194,17 @@ export class SipJsAdapter implements SipPort {
       throw appError("validation");
     }
     const sessionId = newSessionId();
-    const inviter = new Inviter(this.userAgent, parsed as URI);
+    const inviter = new Inviter(this.userAgent, parsed as URI, {
+      sessionDescriptionHandlerOptions: { constraints: mediaConstraintsFor(mediaMode) },
+    });
     this.trackSession(sessionId, inviter);
-    await inviter.invite();
+    try {
+      await inviter.invite();
+    } catch (error) {
+      this.removeSession(sessionId);
+      throw error;
+    }
+    this.emitLocalStream(sessionId);
     return {
       sessionId,
       cancel: async () => {
@@ -263,7 +289,9 @@ export class SipJsAdapter implements SipPort {
       sessionId,
       identity,
       accept: async () => {
-        await invitation.accept();
+        await invitation.accept({
+          sessionDescriptionHandlerOptions: { constraints: mediaConstraintsFor("audio") },
+        });
       },
       reject: async () => {
         await invitation.reject();
@@ -277,19 +305,48 @@ export class SipJsAdapter implements SipPort {
     session.stateChange.addListener((state) => {
       if (state === SessionState.Establishing) {
         this.events.onOutgoingProgress?.(sessionId);
+        this.emitLocalStream(sessionId);
       }
       if (state === SessionState.Established) {
         this.events.onOutgoingAccepted?.(sessionId);
-        const remote = remoteAudioStream(session);
-        if (remote) {
-          this.events.onRemoteStream?.(sessionId, remote);
-        }
+        this.observeRemoteStream(sessionId);
       }
       if (state === SessionState.Terminated) {
-        this.sessions.delete(sessionId);
+        this.removeSession(sessionId);
         this.events.onSessionTerminated?.(sessionId);
       }
     });
+  }
+
+  private emitLocalStream(sessionId: SessionId): void {
+    const record = this.sessions.get(sessionId);
+    const stream = record ? localStream(record.session) : null;
+    if (!record || !stream || record.localStream === stream) {
+      return;
+    }
+    record.localStream = stream;
+    this.events.onLocalStream?.(sessionId, stream);
+  }
+
+  private observeRemoteStream(sessionId: SessionId): void {
+    const record = this.sessions.get(sessionId);
+    const stream = record ? remoteStream(record.session) : null;
+    if (!record || !stream) {
+      return;
+    }
+    this.events.onRemoteStream?.(sessionId, stream);
+    if (record.removeRemoteTrackListener || !stream.addEventListener) {
+      return;
+    }
+    const onAddTrack = () => this.events.onRemoteStream?.(sessionId, stream);
+    stream.addEventListener("addtrack", onAddTrack);
+    record.removeRemoteTrackListener = () => stream.removeEventListener("addtrack", onAddTrack);
+  }
+
+  private removeSession(sessionId: SessionId): void {
+    const record = this.sessions.get(sessionId);
+    record?.removeRemoteTrackListener?.();
+    this.sessions.delete(sessionId);
   }
 
   private clearPassword(): void {
@@ -309,7 +366,33 @@ export class SipJsAdapter implements SipPort {
   }
 }
 
-function remoteAudioStream(session: Session): MediaStream | null {
+function localStream(session: Session): MediaStream | null {
+  return mediaHandler(session)?.localMediaStream ?? null;
+}
+
+function remoteStream(session: Session): MediaStream | null {
+  const remote = mediaHandler(session)?.remoteMediaStream;
+  if (remote) {
+    return remote;
+  }
+  return receiverStream(session);
+}
+
+function mediaHandler(session: Session): {
+  localMediaStream?: MediaStream;
+  remoteMediaStream?: MediaStream;
+  peerConnection?: RTCPeerConnection;
+} | null {
+  return (
+    (session.sessionDescriptionHandler as {
+      localMediaStream?: MediaStream;
+      remoteMediaStream?: MediaStream;
+      peerConnection?: RTCPeerConnection;
+    } | null) ?? null
+  );
+}
+
+function receiverStream(session: Session): MediaStream | null {
   const handler = session.sessionDescriptionHandler as {
     peerConnection?: RTCPeerConnection;
   } | null;
@@ -319,7 +402,7 @@ function remoteAudioStream(session: Session): MediaStream | null {
   }
   const stream = new MediaStream();
   for (const receiver of peer.getReceivers()) {
-    if (receiver.track?.kind === "audio") {
+    if (receiver.track) {
       stream.addTrack(receiver.track);
     }
   }

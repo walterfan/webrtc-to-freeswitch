@@ -1,12 +1,18 @@
 export type MediaFailure = "permission" | "missing-device" | "media";
 
 export type MediaPort = {
-  acquireMicrophone(): Promise<MediaStream>;
-  attachRemote(stream: MediaStream, audioElement: HTMLAudioElement): Promise<"playing" | "blocked">;
+  acquire(constraints: MediaStreamConstraints): Promise<MediaStream>;
+  attachLocal(stream: MediaStream, videoElement: HTMLVideoElement): Promise<void>;
+  attachRemote(
+    stream: MediaStream,
+    audioElement: HTMLAudioElement,
+    videoElement: HTMLVideoElement,
+  ): Promise<"playing" | "blocked">;
   enableAudio(audioElement: HTMLAudioElement): Promise<void>;
   setMuted(muted: boolean): boolean;
   isMuted(): boolean;
-  detachRemote(audioElement: HTMLAudioElement): void;
+  detachLocal(videoElement: HTMLVideoElement): void;
+  detachRemote(audioElement: HTMLAudioElement, videoElement: HTMLVideoElement): void;
   release(): void;
   localStream(): MediaStream | null;
   acquireCount(): number;

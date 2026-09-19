@@ -1,4 +1,4 @@
-import { categoryFromMediaError } from "../services/errors";
+import { appError, categoryFromMediaError } from "../services/errors";
 import type { MediaPort } from "../ports/media";
 
 export type GetUserMedia = (constraints: MediaStreamConstraints) => Promise<MediaStream>;
@@ -24,24 +24,56 @@ export class BrowserMediaAdapter implements MediaPort {
     return this.stream;
   }
 
-  async acquireMicrophone(): Promise<MediaStream> {
+  async acquire(constraints: MediaStreamConstraints): Promise<MediaStream> {
     this.acquires += 1;
     try {
-      this.stream = await this.getUserMedia({ audio: true, video: false });
+      this.stream = await this.getUserMedia({
+        audio: constraints.audio === true,
+        video: constraints.video === true,
+      });
       this.stopped = false;
       this.muted = false;
       return this.stream;
     } catch (error) {
       this.stream = null;
-      throw { category: categoryFromMediaError(error) };
+      throw appError(categoryFromMediaError(error));
     }
+  }
+
+  async attachLocal(stream: MediaStream, videoElement: HTMLVideoElement): Promise<void> {
+    if (!hasLiveTrack(tracksOf(stream, "video"))) {
+      this.detachLocal(videoElement);
+      return;
+    }
+    videoElement.muted = true;
+    videoElement.playsInline = true;
+    videoElement.srcObject = stream;
+    await videoElement.play().catch(() => undefined);
   }
 
   async attachRemote(
     stream: MediaStream,
     audioElement: HTMLAudioElement,
+    videoElement: HTMLVideoElement,
   ): Promise<"playing" | "blocked"> {
-    audioElement.srcObject = stream;
+    const audio = streamForTracks(stream, tracksOf(stream, "audio"));
+    const video = streamForTracks(stream, tracksOf(stream, "video"));
+    if (!audio) {
+      this.detachAudio(audioElement);
+    } else {
+      audioElement.srcObject = audio;
+    }
+    if (!video) {
+      this.detachLocal(videoElement);
+    } else {
+      videoElement.muted = true;
+      videoElement.playsInline = true;
+      videoElement.srcObject = video;
+      await videoElement.play().catch(() => undefined);
+    }
+    if (!audio) {
+      return "playing";
+    }
     try {
       await audioElement.play();
       return "playing";
@@ -70,7 +102,17 @@ export class BrowserMediaAdapter implements MediaPort {
     return tracks.every((track) => !track.enabled);
   }
 
-  detachRemote(audioElement: HTMLAudioElement): void {
+  detachLocal(videoElement: HTMLVideoElement): void {
+    videoElement.pause();
+    videoElement.srcObject = null;
+  }
+
+  detachRemote(audioElement: HTMLAudioElement, videoElement: HTMLVideoElement): void {
+    this.detachAudio(audioElement);
+    this.detachLocal(videoElement);
+  }
+
+  private detachAudio(audioElement: HTMLAudioElement): void {
     audioElement.pause();
     audioElement.srcObject = null;
   }
@@ -87,4 +129,24 @@ export class BrowserMediaAdapter implements MediaPort {
     this.stream = null;
     this.muted = false;
   }
+}
+
+function hasLiveTrack(tracks: MediaStreamTrack[]): boolean {
+  return tracks.some((track) => track.readyState !== "ended");
+}
+
+function tracksOf(stream: MediaStream, kind: "audio" | "video"): MediaStreamTrack[] {
+  const getter = kind === "audio" ? stream.getAudioTracks : stream.getVideoTracks;
+  return getter ? getter.call(stream) : [];
+}
+
+function streamForTracks(source: MediaStream, tracks: MediaStreamTrack[]): MediaStream | null {
+  const liveTracks = tracks.filter((track) => track.readyState !== "ended");
+  if (liveTracks.length === 0) {
+    return null;
+  }
+  if (typeof MediaStream === "undefined") {
+    return source;
+  }
+  return new MediaStream(liveTracks);
 }
