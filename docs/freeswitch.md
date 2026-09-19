@@ -102,4 +102,4 @@ uv run fab pcap-pull --remote=/tmp/fs-....pcap
 
 Or via Make: `make ops-sync`, `make ops-usage`, `make ops-fab ARGS='fs-cli --cmd=status'`.
 
-Design notes: [`docs/superpowers/specs/2026-09-11-freeswitch-ops-fabfile-design.md`](superpowers/specs/2026-09-11-freeswitch-ops-fabfile-design.md).
+
